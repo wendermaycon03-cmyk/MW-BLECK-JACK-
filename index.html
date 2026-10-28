@@ -1,0 +1,260 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MW BLACKJACK ANALYZER</title>
+<style>
+:root{--bg:#08060d;--panel:#151020;--purple:#9b5cff;--pink:#ff36c7;--text:#f7f2ff;--muted:#b7abc9;--green:#48f0b5}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at top,#25103b,#08060d 55%);color:var(--text);font-family:Arial,sans-serif;min-height:100vh}
+header{text-align:center;padding:30px 15px 20px}
+.logo{font-size:12px;letter-spacing:5px;color:var(--pink);font-weight:bold}
+h1{font-size:clamp(25px,5vw,42px);margin:12px 0;background:linear-gradient(90deg,#fff,var(--purple),var(--pink));color:transparent;background-clip:text}
+header p{color:var(--muted);font-size:14px}
+main{max-width:1050px;margin:auto;padding:15px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px}
+.panel{background:linear-gradient(145deg,#191226,#100c18);border:1px solid #38224c;border-radius:18px;padding:20px;box-shadow:0 10px 35px #0005}
+h2{font-size:17px;margin:0 0 15px}
+.hand{display:flex;gap:8px;flex-wrap:wrap;min-height:45px;margin:12px 0}
+.playing-card{background:#f8f4ff;color:#171020;border-radius:8px;width:48px;height:65px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:bold;box-shadow:0 3px 8px #0006}
+.red{color:#e52d68}
+.total{font-size:14px;color:var(--muted);margin:10px 0}
+.buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+button,select,input{font:inherit}
+.cardbtn{padding:12px 5px;background:#21172f;border:1px solid #51336b;color:white;border-radius:9px;cursor:pointer}
+.cardbtn:hover{background:#42245f;border-color:var(--pink)}
+.action{padding:12px 15px;border:0;border-radius:9px;font-weight:bold;cursor:pointer;background:linear-gradient(90deg,var(--purple),var(--pink));color:white}
+.secondary{padding:10px 12px;background:#21172f;border:1px solid #51336b;color:white;border-radius:9px;cursor:pointer}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.stat{background:#0c0912;border:1px solid #30213f;border-radius:12px;padding:15px;margin-top:10px}
+.stat strong{font-size:27px;display:block;color:var(--green);margin:5px 0}
+.muted{color:var(--muted);font-size:13px;line-height:1.5}
+.bar{height:9px;background:#30213f;border-radius:20px;overflow:hidden;margin:8px 0 14px}
+.fill{height:100%;width:0;background:linear-gradient(90deg,var(--purple),var(--pink));transition:width .2s}
+select{background:#100b18;color:white;border:1px solid #51336b;border-radius:8px;padding:10px;width:100%;margin:8px 0}
+.history{max-height:160px;overflow:auto;font-size:13px;color:var(--muted);line-height:1.8}
+footer{text-align:center;color:#756887;font-size:12px;padding:25px}
+</style>
+</head>
+<body>
+<header>
+<div class="logo">MW TECHNOLOGY</div>
+<h1>BLACKJACK ANALYZER</h1>
+<p>ANALISADOR DE CARTAS • JOGO 21</p>
+</header>
+
+<main>
+<div class="grid">
+<section class="panel">
+<h2>♠️ Sua mão</h2>
+<div class="hand" id="playerHand"></div>
+<div class="total" id="playerTotal">Total: 0</div>
+<div class="buttons" id="playerButtons"></div>
+<div class="row">
+<button class="secondary" onclick="undo('player')">↶ Desfazer</button>
+<button class="secondary" onclick="clearHand('player')">Limpar mão</button>
+</div>
+</section>
+
+<section class="panel">
+<h2>♥️ Dealer — carta visível</h2>
+<div class="hand" id="dealerHand"></div>
+<div class="total" id="dealerTotal">Total visível: 0</div>
+<div class="buttons" id="dealerButtons"></div>
+<div class="row">
+<button class="secondary" onclick="undo('dealer')">↶ Desfazer</button>
+<button class="secondary" onclick="clearHand('dealer')">Limpar mão</button>
+</div>
+<p class="muted">Registre somente as cartas que você consegue ver. Não registre uma carta escondida como se fosse conhecida.</p>
+</section>
+</div>
+
+<div class="grid" style="margin-top:16px">
+<section class="panel">
+<h2>⚙️ Configuração</h2>
+<label for="decks">Baralhos usados na mesa</label>
+<select id="decks" onchange="recalculate()">
+<option value="1">1 baralho</option>
+<option value="2">2 baralhos</option>
+<option value="4">4 baralhos</option>
+<option value="6" selected>6 baralhos</option>
+<option value="8">8 baralhos</option>
+</select>
+<label for="soft17">Dealer para no soft 17?</label>
+<select id="soft17" onchange="recalculate()">
+<option value="stand" selected>Sim — para no 17</option>
+<option value="hit">Não — compra no soft 17</option>
+</select>
+<div class="row">
+<button class="action" onclick="resetAll()">Nova rodada</button>
+<button class="secondary" onclick="exportData()">Exportar registro</button>
+</div>
+</section>
+
+<section class="panel">
+<h2>📊 Análise da sua mão</h2>
+<div class="stat">
+<span class="muted">Chance estimada de estourar se comprar 1 carta</span>
+<strong id="bust">—</strong>
+<div class="bar"><div class="fill" id="bustBar"></div></div>
+</div>
+<div class="stat">
+<span class="muted">Chance estimada de não estourar</span>
+<strong id="safe">—</strong>
+<div class="bar"><div class="fill" id="safeBar"></div></div>
+</div>
+<div class="stat">
+<span class="muted">Cartas visíveis registradas</span>
+<strong id="seen">0</strong>
+</div>
+<p class="muted" id="analysisNote">Registre suas cartas para iniciar a análise.</p>
+</section>
+</div>
+
+<section class="panel" style="margin-top:16px">
+<h2>🎯 Simulação do dealer</h2>
+<p class="muted">Estimativa por simulação usando os baralhos e as cartas visíveis registradas. Não conhece a carta escondida do dealer.</p>
+<div class="grid">
+<div class="stat"><span class="muted">Dealer estourar</span><strong id="dealerBust">—</strong></div>
+<div class="stat"><span class="muted">Dealer terminar em 17–21</span><strong id="dealerMade">—</strong></div>
+<div class="stat"><span class="muted">Sua mão já está acima de 21?</span><strong id="over21">—</strong></div>
+</div>
+<p class="muted" id="simulationNote">Adicione pelo menos uma carta visível do dealer para simular.</p>
+</section>
+
+<section class="panel" style="margin-top:16px">
+<h2>🧾 Histórico desta rodada</h2>
+<div id="history" class="history">Nenhuma carta registrada.</div>
+<div class="row"><button class="secondary" onclick="undoLast()">Desfazer última carta</button></div>
+</section>
+</main>
+
+<footer>MW BLACKJACK ANALYZER • Ferramenta informativa. Resultados estimados, sem garantia de vitória.</footer>
+
+<script>
+const ranks=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+let events=[];
+function cardValue(c){return c==='A'?11:['J','Q','K'].includes(c)?10:Number(c)}
+function handInfo(cards){
+ let total=cards.reduce((s,c)=>s+cardValue(c),0),aces=cards.filter(c=>c==='A').length;
+ while(total>21&&aces>0){total-=10;aces--}
+ return {total,soft:cards.includes('A')&&total<=21&&cards.reduce((s,c)=>s+cardValue(c),0)===total};
+}
+function handCards(who){return events.filter(e=>e.who===who).map(e=>e.card)}
+function buildButtons(){
+ ['player','dealer'].forEach(who=>{
+  const el=document.getElementById(who+'Buttons');
+  el.innerHTML='';
+  ranks.forEach(c=>{
+   const b=document.createElement('button');
+   b.className='cardbtn';b.textContent=c;
+   b.onclick=()=>addCard(who,c);
+   el.appendChild(b);
+  });
+ });
+}
+function addCard(who,card){events.push({who,card,time:new Date().toLocaleTimeString('pt-BR')});render()}
+function undo(who){for(let i=events.length-1;i>=0;i--){if(events[i].who===who){events.splice(i,1);break}}render()}
+function clearHand(who){events=events.filter(e=>e.who!==who);render()}
+function undoLast(){events.pop();render()}
+function render(){
+ ['player','dealer'].forEach(who=>{
+  const cards=handCards(who),el=document.getElementById(who+'Hand');
+  el.innerHTML='';
+  cards.forEach(c=>{
+   const d=document.createElement('div');d.className='playing-card '+(['A','J','Q','K'].includes(c)?'red':'');
+   d.textContent=c;el.appendChild(d);
+  });
+  const info=handInfo(cards);
+  document.getElementById(who+'Total').textContent=(who==='dealer'?'Total visível: ':'Total: ')+(cards.length?info.total:'0')+(info.total>21?' — ESTOUROU!':'');
+ });
+ document.getElementById('history').innerHTML=events.length?events.map((e,i)=>`${i+1}. ${e.time} — ${e.who==='player'?'Sua mão':'Dealer'}: ${e.card}`).join('<br>'):'Nenhuma carta registrada.';
+ recalculate();
+}
+function makeShoe(){
+ const decks=Number(document.getElementById('decks').value);
+ const shoe={A:4*decks,'2':4*decks,'3':4*decks,'4':4*decks,'5':4*decks,'6':4*decks,'7':4*decks,'8':4*decks,'9':4*decks,'10':16*decks};
+ events.forEach(e=>{
+  const key=['J','Q','K'].includes(e.card)?'10':e.card;
+  if(shoe[key]>0)shoe[key]--;
+ });
+ return shoe;
+}
+function pct(n,d){return d?((n/d)*100).toFixed(1)+'%':'—'}
+function recalculate(){
+ const player=handCards('player'),dealer=handCards('dealer');
+ const shoe=makeShoe(),keys=Object.keys(shoe);
+ const remaining=keys.reduce((s,k)=>s+Math.max(0,shoe[k]),0);
+ const total=handInfo(player).total;
+ let bust=0,safe=0;
+ if(player.length&&remaining>0){
+  keys.forEach(k=>{
+   const count=Math.max(0,shoe[k]);if(!count)return;
+   const next=handInfo([...player,k]).total;
+   if(next>21)bust+=count;else safe+=count;
+  });
+  document.getElementById('bust').textContent=pct(bust,remaining);
+  document.getElementById('safe').textContent=pct(safe,remaining);
+  document.getElementById('bustBar').style.width=(bust/remaining*100)+'%';
+  document.getElementById('safeBar').style.width=(safe/remaining*100)+'%';
+ }else{
+  document.getElementById('bust').textContent='—';
+  document.getElementById('safe').textContent='—';
+  document.getElementById('bustBar').style.width='0%';
+  document.getElementById('safeBar').style.width='0%';
+ }
+ document.getElementById('seen').textContent=events.length;
+ document.getElementById('over21').textContent=player.length?(total>21?'SIM':'NÃO'):'—';
+ document.getElementById('analysisNote').textContent=player.length?(total>21?'Sua mão já passou de 21.':total===21?'Você tem 21. Confira as regras da mesa.':'Probabilidades calculadas com as cartas visíveis registradas.'):'Registre suas cartas para iniciar a análise.';
+ simulateDealer(shoe,dealer,player);
+}
+function draw(shoe){
+ let total=Object.values(shoe).reduce((a,b)=>a+Math.max(0,b),0);
+ if(total<=0)return null;
+ let n=Math.random()*total;
+ for(const k of Object.keys(shoe)){n-=Math.max(0,shoe[k]);if(n<0){shoe[k]--;return k}}
+ return null;
+}
+function dealerPlay(shoe,cards){
+ let hand=cards.slice();
+ while(hand.length<2){const c=draw(shoe);if(!c)break;hand.push(c)}
+ while(true){
+  const info=handInfo(hand);
+  if(info.total>21)return {total:info.total,bust:true};
+  const hitsSoft17=document.getElementById('soft17').value==='hit';
+  if(info.total<17||(info.total===17&&info.soft&&hitsSoft17)){
+   const c=draw(shoe);if(!c)break;hand.push(c);
+  }else break;
+ }
+ return {total:handInfo(hand).total,bust:false};
+}
+function simulateDealer(shoe,dealer,player){
+ if(!dealer.length){
+  document.getElementById('dealerBust').textContent='—';
+  document.getElementById('dealerMade').textContent='—';
+  document.getElementById('simulationNote').textContent='Adicione pelo menos uma carta visível do dealer para simular.';
+  return;
+ }
+ let bust=0,made=0,n=4000;
+ for(let i=0;i<n;i++){
+  const s={...shoe};
+  const d=dealerPlay(s,dealer);
+  if(d.bust)bust++;
+  else if(d.total>=17&&d.total<=21)made++;
+ }
+ document.getElementById('dealerBust').textContent=pct(bust,n);
+ document.getElementById('dealerMade').textContent=pct(made,n);
+ document.getElementById('simulationNote').textContent='Simulação aleatória de '+n.toLocaleString('pt-BR')+' rodadas. Estimativa sujeita a variação; não prevê a próxima carta real.';
+}
+function resetAll(){events=[];render()}
+function exportData(){
+ const content='Horário;Mão;Carta\n'+events.map(e=>`${e.time};${e.who};${e.card}`).join('\n');
+ const blob=new Blob([content],{type:'text/csv;charset=utf-8;'});
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='mw-blackjack-historico.csv';a.click();URL.revokeObjectURL(a.href);
+}
+buildButtons();render();
+</script>
+</body>
+</html>
